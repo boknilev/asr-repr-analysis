@@ -1,6 +1,6 @@
 # Analyzing ASR Representations
 
-This repository contains code for our paper on analyzing speech representations in end-to-end automatic speec recognition models:
+This repository contains code for our paper on analyzing speech representations in end-to-end automatic speech recognition models:
 
 "Analyzing Hidden Representations in End-to-End Automatic Speech Recognition Systems", Yonatan Belinkov and James Glass, NIPS 2017. 
 
