@@ -63,6 +63,23 @@ function getSplitDBs(dirPath)
   return dbSpect, dbTrans, dbTimes, dataSize
 end
 
+-- TODO merge with getSplitDBs
+function getSplitDBsUttids(dirPath)
+  local dbSpect = lmdb.env { Path = dirPath .. '/spect', Name = 'spect' }
+  local dbTrans = lmdb.env { Path = dirPath .. '/trans', Name = 'trans' }
+  local dbUttids = lmdb.env { Path = dirPath .. '/uttid', Name = 'uttid' }
+
+  dbSpect:open()
+  local dataSize = dbSpect:stat()['entries']
+  local readerSpect = dbSpect:txn(true)
+  local tensor = readerSpect:get(1):float()
+  local freq = tensor:size(1)
+  
+  dbSpect:close()
+  
+  return dbSpect, dbTrans, dbUttids, dataSize
+end
+
 
 function loadData(dbSpect, dbTrans, dbTimes)
   local tensors = tds.Vec()
@@ -97,6 +114,42 @@ function loadData(dbSpect, dbTrans, dbTimes)
   readerTimes:abort(); dbTimes:close()
   
   return tensors, transcripts, times
+end
+
+-- TODO merge with loadData
+function loadDataUttids(dbSpect, dbTrans, dbUttids)
+  local tensors = tds.Vec()
+  --local targets = {}
+  local transcripts = {}
+  local uttids = {}
+
+  local freq = 0  
+  
+  dbSpect:open(); local readerSpect = dbSpect:txn(true) 
+  dbTrans:open(); local readerTrans = dbTrans:txn(true)
+  dbUttids:open(); local readerUttids = dbUttids:txn(true)
+  
+  local size = dbSpect:stat()['entries']
+
+  -- read out all the data and store in lists
+  for x = 1, size do
+    local tensor = readerSpect:get(x):float()
+    local transcript = readerTrans:get(x)
+    local curUttid = readerUttids:get(x)
+
+    freq = tensor:size(1)
+
+    tensors:insert(tensor)
+    --table.insert(targets, self.mapper:encodeString(transcript))
+    table.insert(transcripts, transcript)
+    table.insert(uttids, curUttid)
+  end
+
+  readerSpect:abort(); dbSpect:close()
+  readerTrans:abort(); dbTrans:close()
+  readerUttids:abort(); dbUttids:close()
+  
+  return tensors, transcripts, uttids
 end
 
 
@@ -136,6 +189,44 @@ function nextBatch(indices, spects, transcripts, times)
   
   --return inputs, targets, sizes, transcripts, times
   return batchInputs, sizes, batchTranscripts, batchTimes
+end
+
+function nextBatchUttids(indices, spects, transcripts, uttids)
+  local batchTensors = tds.Vec()
+  --local targets = {}
+  local batchTranscripts = {}
+  local batchUttids = {}
+
+  local maxLength = 0
+  local freq = 0  
+  
+  local size = indices:size(1) 
+  local batchSizes = torch.Tensor(#indices)
+
+  -- reads out a batch and store in lists
+  for x = 1, size do
+    local ind = indices[x]
+    local tensor = spects[ind]
+    local transcript = transcripts[ind]
+    local curUttid = uttids[ind]
+
+    freq = tensor:size(1)
+    batchSizes[x] = tensor:size(2)
+    if maxLength < tensor:size(2) then maxLength = tensor:size(2) end -- find the max len in this batch
+
+    batchTensors:insert(tensor)
+    --table.insert(targets, self.mapper:encodeString(transcript))
+    table.insert(batchTranscripts, transcript)
+    table.insert(batchUttids, curUttid)
+  end
+
+  local batchInputs = torch.Tensor(size, 1, freq, maxLength):zero()
+  for ind, tensor in ipairs(batchTensors) do
+    batchInputs[ind][1]:narrow(2, 1, tensor:size(2)):copy(tensor)
+  end
+  
+  --return inputs, targets, sizes, transcripts, uttids
+  return batchInputs, sizes, batchTranscripts, batchUttids
 end
 
 
@@ -203,3 +294,19 @@ function getWindowedInput(windowSize, repr, t, k, timeDim)
 end
 
 
+function writeMatrixToFile(mat, file, sep)  
+  assert(mat:dim() == 2, 'wrong matrix dimension: ' .. mat:dim())  
+  local sep = sep or ' ' 
+  local f = assert(io.open(file, 'w'))
+  for i = 1, mat:size(1) do
+    for j = 1, mat:size(2) do
+      f:write(mat[i][j])
+      if j == mat:size(2) then
+        f:write('\n')
+      else
+        f:write(sep)
+      end
+    end
+  end  
+  f:close()
+end

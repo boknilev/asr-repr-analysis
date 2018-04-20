@@ -25,13 +25,14 @@ cmd:option('-testSetLMDBPath', '/data/sls/scratch/belinkov/asr/prediction/data/t
 --cmd:option('-logsValidationPath', './logs/ValidationScores/', ' Path to save Validation logs')
 cmd:option('-logFile', './log.txt', 'File to save logs')
 cmd:option('-plot', false, 'Plot loss and accuracy')
-cmd:option('-dictionaryPath', 'dictionary', ' File containing the dictionary to use')
+cmd:option('-dictionaryPath', '/usr/users/belinkov/CTCSpeechRecognition/dictionary', ' File containing the dictionary to use')
 cmd:option('-batchSize', 16, 'Batch size in training')
 cmd:option('-validationBatchSize', 1, 'Batch size for validation')
 cmd:option('-patience', 5, 'Patience when training the classifier')
 cmd:option('-optim', 'ADAM', 'Optimizer to use in the classifier (ADAM/ADAGRAD/ADADELTA/SGD)')
 cmd:option('-classifierSize', 500, 'Classifier hidden layer size')
 cmd:option('-linearClassifier', false, 'Use linear classifier')
+cmd:option('-twoHiddenClassifier', false, 'Use a classifier with 2 hidden layers')
 cmd:option('-epochs', 30, 'Number of epochs for training the classifier')
 cmd:option('-learningRate', 0.001, 'Learning rate for the classifier')
 cmd:option('-reprLayer', 'cnn', 'Deep speech representation to use (cnn | rnn | cnnk (k=1,2) | rnnk (k=1...8) | input')
@@ -156,6 +157,11 @@ function init(opt)
     classifier:add(nn.Linear(classifierInputSize, opt.classifierSize))
     classifier:add(nn.Dropout(opt.classifierDropout))
     classifier:add(nn.ReLU(true))
+    if opt.twoHiddenClassifier then 
+      classifier:add(nn.Linear(opt.classifierSize, opt.classifierSize))
+      classifier:add(nn.Dropout(opt.classifierDropout))
+      classifier:add(nn.ReLU(true))
+    end
     classifier:add(nn.Linear(opt.classifierSize, numClasses)) 
   end
   
